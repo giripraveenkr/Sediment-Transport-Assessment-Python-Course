@@ -1,0 +1,23 @@
+name: wrr-proj
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
+  - jupyter
+  - geopandas
+  - shapely
+  - pyproj
+  - rasterio
+  - rioxarray
+  - gdal
+  - xarray
+  - dask
+  - pytest
+  - pip
+  - pip:
+      - black
+      - ruff
