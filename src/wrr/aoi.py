@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from shapely.geometry import box
 
-
 @dataclass
 class AOI:
     """
@@ -22,17 +21,20 @@ class AOI:
 
     def __post_init__(self):
         """
-        Automatically creates a shapely geometry object after initialization.
-        This allows the AOI to be used directly in spatial operations.
+        Automatically creates derived attributes after initialization.
         """
+        # 1. Create the shapely geometry (for clipping)
         self.geometry = box(self.xmin, self.ymin, self.xmax, self.ymax)
+        
+        # 2. Create the 'bounds' tuple (THIS WAS MISSING!)
+        self.bounds = (self.xmin, self.ymin, self.xmax, self.ymax)
 
     def to_dict(self):
         """
         Returns the AOI details as a dictionary.
         """
         return {
-            "bounds": (self.xmin, self.ymin, self.xmax, self.ymax),
+            "bounds": self.bounds,
             "crs": self.crs
         }
 
@@ -41,6 +43,5 @@ class AOI:
         Returns a readable string representation of the object.
         """
         return (
-            f"AOI(bounds=({self.xmin}, {self.ymin}, "
-            f"{self.xmax}, {self.ymax}), crs='{self.crs}')"
+            f"AOI(bounds={self.bounds}, crs='{self.crs}')"
         )
