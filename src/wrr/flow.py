@@ -1,6 +1,11 @@
-import rasterio
-import numpy as np
+"""
+Module: flow.py
+Description: Computes flow direction and flow accumulation using D8 algorithm.
+"""
+
 import os
+import numpy as np
+import rasterio
 
 
 class FlowRouter:
@@ -36,7 +41,6 @@ class FlowRouter:
 
         with rasterio.open(self.dem_path) as src:
             dem = src.read(1, masked=True)
-            transform = src.transform
             meta = src.meta.copy()
 
         # D8 direction encoding
@@ -48,10 +52,12 @@ class FlowRouter:
 
         flow_dir = np.zeros(dem.shape, dtype=np.uint8)
 
+        # Iterate over cells (skipping 1-pixel border)
         for i in range(1, dem.shape[0] - 1):
             for j in range(1, dem.shape[1] - 1):
-                window = dem[i-1:i+2, j-1:j+2]
-                if window.mask.any():
+                window = dem[i - 1:i + 2, j - 1:j + 2]
+                
+                if np.ma.is_masked(window):
                     continue
 
                 center = dem[i, j]
@@ -59,6 +65,7 @@ class FlowRouter:
                 diff[1, 1] = 0
 
                 max_drop = diff.max()
+                
                 if max_drop > 0:
                     idx = np.unravel_index(np.argmax(diff), diff.shape)
                     flow_dir[i, j] = directions[idx]
@@ -69,7 +76,7 @@ class FlowRouter:
             "nodata": 0
         })
 
-        out_path = f"{self.output_dir}/flow_direction.tif"
+        out_path = os.path.join(self.output_dir, "flow_direction.tif")
 
         with rasterio.open(out_path, "w", **meta) as dst:
             dst.write(flow_dir, 1)
@@ -92,25 +99,46 @@ class FlowRouter:
             flow_dir = src.read(1)
             meta = src.meta.copy()
 
+        # Initialize accumulation with 1
         acc = np.ones(flow_dir.shape, dtype=np.float32)
 
+        # Safety brake to prevent infinite loops
+        max_iterations = 200
+        iteration = 0
         changed = True
-        while changed:
+
+        while changed and iteration < max_iterations:
             changed = False
+            iteration += 1
+            
+            if iteration % 10 == 0:
+                print(f"   Iteration {iteration}")
+
             for i in range(1, flow_dir.shape[0] - 1):
                 for j in range(1, flow_dir.shape[1] - 1):
                     code = flow_dir[i, j]
+                    
                     if code == 0:
                         continue
 
-                    for di in [-1, 0, 1]:
-                        for dj in [-1, 0, 1]:
-                            ni, nj = i + di, j + dj
-                            if flow_dir[ni, nj] == code:
-                                new_val = acc[ni, nj] + acc[i, j]
-                                if new_val > acc[ni, nj]:
-                                    acc[ni, nj] = new_val
-                                    changed = True
+                    # Determine downstream neighbor
+                    di, dj = 0, 0
+                    if code == 1:     di, dj = 0, 1
+                    elif code == 2:   di, dj = 1, 1
+                    elif code == 4:   di, dj = 1, 0
+                    elif code == 8:   di, dj = 1, -1
+                    elif code == 16:  di, dj = 0, -1
+                    elif code == 32:  di, dj = -1, -1
+                    elif code == 64:  di, dj = -1, 0
+                    elif code == 128: di, dj = -1, 1
+
+                    ni, nj = i + di, j + dj
+
+                    if 0 <= ni < flow_dir.shape[0] and 0 <= nj < flow_dir.shape[1]:
+                        # Push accumulation downstream
+                        if acc[ni, nj] < acc[i, j] + 1:
+                            acc[ni, nj] = acc[i, j] + 1
+                            changed = True
 
         meta.update({
             "dtype": "float32",
@@ -118,7 +146,7 @@ class FlowRouter:
             "nodata": 0
         })
 
-        out_path = f"{self.output_dir}/flow_accumulation.tif"
+        out_path = os.path.join(self.output_dir, "flow_accumulation.tif")
 
         with rasterio.open(out_path, "w", **meta) as dst:
             dst.write(acc, 1)
