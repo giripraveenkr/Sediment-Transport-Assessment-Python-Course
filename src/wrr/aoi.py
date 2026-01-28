@@ -5,13 +5,6 @@ from shapely.geometry import box
 class AOI:
     """
     Represents an Area of Interest (AOI) defined by a bounding box.
-
-    Attributes:
-        xmin (float): Minimum X coordinate (longitude).
-        xmax (float): Maximum X coordinate (longitude).
-        ymin (float): Minimum Y coordinate (latitude).
-        ymax (float): Maximum Y coordinate (latitude).
-        crs (str): Coordinate Reference System (default: EPSG:4326).
     """
     xmin: float
     xmax: float
@@ -21,27 +14,27 @@ class AOI:
 
     def __post_init__(self):
         """
-        Automatically creates derived attributes after initialization.
+        Validates input and creates derived geometry attributes.
         """
+        # Requirement A.2: Reject invalid or inverted boxes
+        if self.xmin >= self.xmax:
+            raise ValueError(f"Invalid Longitude: West ({self.xmin}) must be less than East ({self.xmax})")
+        
+        if self.ymin >= self.ymax:
+            raise ValueError(f"Invalid Latitude: South ({self.ymin}) must be less than North ({self.ymax})")
+
         # 1. Create the shapely geometry (for clipping)
         self.geometry = box(self.xmin, self.ymin, self.xmax, self.ymax)
         
-        # 2. Create the 'bounds' tuple (THIS WAS MISSING!)
+        # 2. Create the 'bounds' tuple
         self.bounds = (self.xmin, self.ymin, self.xmax, self.ymax)
 
     def to_dict(self):
-        """
-        Returns the AOI details as a dictionary.
-        """
+        """Returns the AOI details as a dictionary."""
         return {
             "bounds": self.bounds,
             "crs": self.crs
         }
 
     def __repr__(self):
-        """
-        Returns a readable string representation of the object.
-        """
-        return (
-            f"AOI(bounds={self.bounds}, crs='{self.crs}')"
-        )
+        return f"AOI(bounds={self.bounds}, crs='{self.crs}')"
