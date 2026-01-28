@@ -6,17 +6,19 @@ End-to-end debug script to validate:
 - DEM download, clipping, reprojection
 - Flow direction & accumulation
 - Thalweg extraction
+- Longitudinal profile sampling
 
-Run this BEFORE proceeding to longitudinal profile sampling.
+Run this BEFORE proceeding to sediment transport computation.
 """
 
 import sys
 import os
 
+# Make src/ discoverable for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-
 from wrr import AOI, DEMFetcher, FlowRouter, ThalwegExtractor
+from wrr.profile import ProfileSampler
 
 
 def debug_pipeline():
@@ -45,7 +47,7 @@ def debug_pipeline():
     if not api_key:
         raise RuntimeError("API key required to continue.")
 
-    print("\n   Downloading DEM...")
+    print("   Downloading DEM...")
     dem_fetcher.download(api_key)
 
     print("   Clipping DEM to AOI...")
@@ -84,7 +86,7 @@ def debug_pipeline():
     thalweg_extractor = ThalwegExtractor(
         flow_acc_path=flow_acc_path,
         dem_path=dem_path,
-        threshold=1000  # Adjust if needed
+        threshold=100
     )
 
     thalweg_path = thalweg_extractor.extract()
@@ -95,6 +97,22 @@ def debug_pipeline():
     print(f"   ✓ Thalweg extracted: {thalweg_path}")
 
     # ------------------------------------------------------------------
+    # 5. LONGITUDINAL PROFILE SAMPLING
+    # ------------------------------------------------------------------
+    print("\n5) Sampling longitudinal profile...")
+
+    sampler = ProfileSampler(
+        dem_path=dem_path,
+        thalweg_path=thalweg_path
+    )
+
+    profile_df = sampler.sample(spacing=30)
+    sampler.plot(profile_df)
+
+    profile_dir = "data/profile"
+    print(f"   ✓ Profile CSV and plot saved in: {profile_dir}")
+
+    # ------------------------------------------------------------------
     # FINAL SUMMARY
     # ------------------------------------------------------------------
     print("\n=== PIPELINE DEBUG SUCCESSFUL ===")
@@ -102,7 +120,8 @@ def debug_pipeline():
     print(f" - DEM (projected): {dem_path}")
     print(f" - Flow accumulation: {flow_acc_path}")
     print(f" - Thalweg vector: {thalweg_path}")
-    print("\nYou are READY to proceed to Day 13 (Longitudinal Profile Sampling).")
+    print(f" - Longitudinal profile: {profile_dir}")
+    print("\nYou are READY to proceed to sediment transport computation.")
 
 
 if __name__ == "__main__":
