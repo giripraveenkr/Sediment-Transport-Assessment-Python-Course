@@ -7,36 +7,30 @@ import requests
 import rasterio
 from rasterio.mask import mask
 from osgeo import gdal
-from .aoi import AOI # Import the AOI class that we created!
+from .aoi import AOI
 
 class DEMFetcher:
     def __init__(self, aoi: AOI, output_dir: str = "data/dem"):
         """
         Tools for fetching and processing DEM data.
-        
-        Args:
-            aoi (AOI): An instance of your AOI class.
-            output_dir (str): Where to save the downloaded raster.
         """
         self.aoi = aoi
         self.output_dir = output_dir
         self.filepath = os.path.join(output_dir, "dem.tif")
         
-        # Ensure the output folder exists (creates it if missing)
+        # Ensure the output folder exists
         os.makedirs(output_dir, exist_ok=True)
 
     def download(self, api_key: str):
         """
         Downloads SRTM GL1 (30m) data from OpenTopography.
         """
-        # Check if file exists so we don't download it 100 times
         if os.path.exists(self.filepath):
             print(f"File already exists at {self.filepath}. Skipping download.")
             return
 
         print(f"Requesting DEM for bounds: {self.aoi.bounds}...")
         
-        # FIX 1: Real download logic using 'requests'
         url = "https://portal.opentopography.org/API/globaldem"
         params = {
             "demtype": "SRTMGL1",
@@ -63,7 +57,6 @@ class DEMFetcher:
     def clip(self):
         """
         Refines the DEM by clipping it exactly to the AOI geometry.
-        This removes extra data outside the box and fixes edge artifacts.
         """
         if not os.path.exists(self.filepath):
             print("DEM file not found. Run download() first.")
@@ -71,15 +64,11 @@ class DEMFetcher:
 
         print("Clipping DEM to exact AOI...")
         
-        # Open the raw file
         with rasterio.open(self.filepath) as src:
-            # Mask (clip) the raster using the AOI geometry
             out_image, out_transform = mask(src, [self.aoi.geometry], crop=True)
             nodata = src.nodata
             out_meta = src.meta.copy()
 
-
-        # Update metadata (height/width change after clipping)
         out_meta.update({
             "driver": "GTiff",
             "height": out_image.shape[1],
@@ -88,31 +77,29 @@ class DEMFetcher:
             "nodata": nodata
         })
 
-        # Save the clipped version over the old file
         with rasterio.open(self.filepath, "w", **out_meta) as dest:
             dest.write(out_image)
             
         print("DEM clipped and saved.")
+
     def reproject(self, target_crs: str = "EPSG:32632"):
         """
-        Reproject DEM to a metric CRS using GDAL.
-        Args:
-            target_crs (str): Target coordinate system (default: UTM Zone 32N).
+        Reproject DEM to a metric CRS using Bilinear interpolation.
+        We DO NOT force a 10m grid, as that creates sinks (pits) that break flow routing.
         """
         if not os.path.exists(self.filepath):
             print("DEM file not found. Run clip() first.")
             return
-
-        # Create a new filename for the metric version
+    
         projected_path = self.filepath.replace(".tif", "_projected.tif")
-        print(f"Reprojecting DEM to {target_crs} using GDAL...")
-
-        # 1. Open the file using GDAL (Grading Requirement met!)
+        print(f"Reprojecting DEM to {target_crs} (Standard Bilinear)...")
+    
         ds = gdal.Open(self.filepath)
         if ds is None:
             raise RuntimeError("Failed to open DEM for reprojection.")
-
-        # 2. Use GDAL Warp to reproject
+    
+        # SAFE REPROJECTION:
+        # We let GDAL decide the resolution (keeping it close to original ~30m)
         gdal.Warp(
             projected_path,
             ds,
@@ -120,8 +107,7 @@ class DEMFetcher:
             resampleAlg=gdal.GRA_Bilinear,
             format="GTiff"
         )
-
-        # 3. Update the class to use the new file from now on
+    
         self.filepath = projected_path
         print(f"Reprojected DEM saved to {self.filepath}")
 
