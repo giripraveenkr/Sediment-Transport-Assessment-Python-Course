@@ -1,14 +1,17 @@
 cff-version: 1.2.0
-message: If you use this template, please cite it.
-title: WRR Python Project - Student Starter
+message: If you use this project, please cite it.
+title: Sediment Transport Assessment Pipeline - WRR Project
 type: software
 authors:
-  - family-names: YourSurname
-    given-names: YourName
+  - family-names: Mehebou Kamdjom
+    given-names: Gaelle
+  - family-names: Praveen Kumar
+    given-names: Giri
 keywords:
   - hydraulics
   - geodata
   - GDAL
   - Python
 license: MIT
-repository-code: https://github.com/your-org/your-repo
+repository-code: https://github.com/gaellemehebou-max/Sediment-Transport-Assessment-Python-Course.git
+repository-code: https://github.com/giripraveenkr/Sediment-Transport-Assessment-Python-Course.git

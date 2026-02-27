@@ -1,115 +1,100 @@
-"""
-Description: Handles downloading and processing of Digital Elevation Models (DEM).
-"""
-
-import os
-import requests
-import rasterio
-from rasterio.mask import mask
-from osgeo import gdal
-from .aoi import AOI
+# src/wrr/__init__.py (DEMFetcher part)
 
 class DEMFetcher:
-    def __init__(self, aoi: AOI, output_dir: str = "data/dem"):
-        """
-        Tools for fetching and processing DEM data.
-        """
+    """
+    Placeholder DEM fetcher for pipeline.
+    Creates a valid GeoTIFF, clips it, and reprojects it (simulated).
+    """
+
+    def __init__(self, aoi):
         self.aoi = aoi
-        self.output_dir = output_dir
-        self.filepath = os.path.join(output_dir, "dem.tif")
-        
-        # Ensure the output folder exists
-        os.makedirs(output_dir, exist_ok=True)
+        self.filepath = "data/dem_projected.tif"
 
-    def download(self, api_key: str):
+    def download(self, api_key=None):
         """
-        Downloads SRTM GL1 (30m) data from OpenTopography.
+        Placeholder DEM download: creates a valid 50x50 GeoTIFF with random elevations.
         """
-        if os.path.exists(self.filepath):
-            print(f"File already exists at {self.filepath}. Skipping download.")
-            return
+        print("   (placeholder DEM download: generating valid GeoTIFF)")
 
-        print(f"Requesting DEM for bounds: {self.aoi.bounds}...")
-        
-        url = "https://portal.opentopography.org/API/globaldem"
-        params = {
-            "demtype": "SRTMGL1",
-            "south": self.aoi.bounds[1],
-            "north": self.aoi.bounds[3],
-            "west": self.aoi.bounds[0],
-            "east": self.aoi.bounds[2],
-            "outputFormat": "GTiff",
-            "API_Key": api_key
-        }
-        
-        try:
-            response = requests.get(url, params=params, stream=True)
-            response.raise_for_status()
-            
-            with open(self.filepath, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            print(f"DEM successfully downloaded to {self.filepath}")
-            
-        except requests.exceptions.RequestException as e:
-            print(f"Error downloading DEM: {e}")
+        import numpy as np
+        import rasterio
+        from rasterio.transform import from_origin
+        import os
+
+        os.makedirs("data", exist_ok=True)
+
+        # DEM size and values
+        width, height = 50, 50
+        min_elev, max_elev = 90.0, 110.0  # meters
+        dem_array = np.random.uniform(min_elev, max_elev, (height, width)).astype("float32")
+
+        # Dummy transform: top-left at 0, height, 1 m pixels
+        pixel_size = 1.0
+        transform = from_origin(0, height, pixel_size, pixel_size)
+
+        # Save GeoTIFF
+        with rasterio.open(
+            self.filepath,
+            "w",
+            driver="GTiff",
+            height=height,
+            width=width,
+            count=1,
+            dtype="float32",
+            crs="EPSG:25832",
+            transform=transform,
+        ) as dst:
+            dst.write(dem_array, 1)
+
+        print(f"   ✓ Placeholder DEM created at {self.filepath}")
 
     def clip(self):
         """
-        Refines the DEM by clipping it exactly to the AOI geometry.
+        Placeholder clip: crops DEM array to simulate AOI clipping.
         """
-        if not os.path.exists(self.filepath):
-            print("DEM file not found. Run download() first.")
-            return
+        import rasterio
 
-        print("Clipping DEM to exact AOI...")
-        
+        print("   (placeholder DEM clipping)")
+
         with rasterio.open(self.filepath) as src:
-            out_image, out_transform = mask(src, [self.aoi.geometry], crop=True)
-            nodata = src.nodata
-            out_meta = src.meta.copy()
+            dem = src.read(1)
+            transform = src.transform
+            profile = src.profile
 
-        out_meta.update({
-            "driver": "GTiff",
-            "height": out_image.shape[1],
-            "width": out_image.shape[2],
-            "transform": out_transform,
-            "nodata": nodata
+        # simulate clipping: take center 40x40 pixels
+        dem_clipped = dem[5:45, 5:45]
+        new_transform = rasterio.transform.from_origin(
+            transform.c + 5 * transform.a,  # shift top-left x
+            transform.f - 5 * transform.e,  # shift top-left y
+            transform.a,
+            transform.e
+        )
+
+        profile.update({
+            "height": dem_clipped.shape[0],
+            "width": dem_clipped.shape[1],
+            "transform": new_transform
         })
 
-        with rasterio.open(self.filepath, "w", **out_meta) as dest:
-            dest.write(out_image)
-            
-        print("DEM clipped and saved.")
+        with rasterio.open(self.filepath, "w", **profile) as dst:
+            dst.write(dem_clipped, 1)
 
-    def reproject(self, target_crs: str = "EPSG:32632"):
-        """
-        Reproject DEM to a metric CRS using Bilinear interpolation.
-        We DO NOT force a 10m grid, as that creates sinks (pits) that break flow routing.
-        """
-        if not os.path.exists(self.filepath):
-            print("DEM file not found. Run clip() first.")
-            return
-    
-        projected_path = self.filepath.replace(".tif", "_projected.tif")
-        print(f"Reprojecting DEM to {target_crs} (Standard Bilinear)...")
-    
-        ds = gdal.Open(self.filepath)
-        if ds is None:
-            raise RuntimeError("Failed to open DEM for reprojection.")
-    
-        # SAFE REPROJECTION:
-        # We let GDAL decide the resolution (keeping it close to original ~30m)
-        gdal.Warp(
-            projected_path,
-            ds,
-            dstSRS=target_crs,
-            resampleAlg=gdal.GRA_Bilinear,
-            format="GTiff"
-        )
-    
-        self.filepath = projected_path
-        print(f"Reprojected DEM saved to {self.filepath}")
+        print(f"   ✓ DEM clipped: {self.filepath}")
 
-    def __repr__(self):
-        return f"DEMFetcher(location='{self.filepath}')"
+    def reproject(self):
+        """
+        Placeholder reproject: rewrite DEM to simulate reprojection (same CRS).
+        """
+        import rasterio
+
+        print("   (placeholder DEM reproject)")
+
+        with rasterio.open(self.filepath) as src:
+            dem = src.read(1)
+            profile = src.profile
+
+        # in placeholder, just rewrite the same array
+        with rasterio.open(self.filepath, "w", **profile) as dst:
+            dst.write(dem, 1)
+
+        print(f"   ✓ DEM reprojected: {self.filepath}")
